@@ -462,24 +462,15 @@
     }
 
     async function submitAbsen(nomorHp, tipe) {
-        startLoading("Memproses absen...");
+        const response = await fetch(API + "?action=absen", {
+            method: "POST",
+            body: JSON.stringify({
+              nomorHp: nomorHp,
+              tipe: tipe
+            })
+        });
 
-        try {
-            const params = new URLSearchParams({ nomorHp, tipe });
-            const response = await fetch(`${API}?${params.toString()}`);
-            const res = await response.json();
-
-            endLoading();
-            if (res.success) {
-                Swal.fire('Berhasil', res.message, 'success');
-                refreshData();
-            } else {
-                Swal.fire('Gagal', res.message, 'error');
-            }
-        } catch (err) {
-            endLoading();
-            Swal.fire('Error', err.message, 'error');
-        }
+        return await response.json();
     }
 
 
