@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Absensi Anak Yatim PRO</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        :root { --sidebar-bg: #1e293b; --accent: #dc2626; --body-bg: #f1f5f9; --sidebar-width: 260px; }
+        body { background-color: var(--body-bg); font-family: 'Inter', system-ui, sans-serif; overflow-x: hidden; }
+       
+        /* Layout */
+        #sidebar {
+            width: var(--sidebar-width); height: 100vh; position: fixed; left: 0; top: 0;
+            background: var(--sidebar-bg); color: white; transition: 0.3s; z-index: 1050;
+        }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center; }
+        .sidebar-menu { padding: 15px 0; }
+        .sidebar-item {
+            padding: 12px 20px; display: flex; align-items: center; color: #94a3b8; text-decoration: none;
+            transition: 0.2s; cursor: pointer; border-left: 4px solid transparent; font-size: 0.95rem;
+        }
+        .sidebar-item i { width: 30px; font-size: 1.1rem; }
+        .sidebar-item:hover, .sidebar-item.active { background: rgba(255,255,255,0.05); color: white; border-left-color: var(--accent); }
+
+
+        #main-content { margin-left: var(--sidebar-width); padding: 25px; transition: 0.3s; min-height: 100vh; }
+       
+        @media (max-width: 991px) {
+            #sidebar { left: calc(-1 * var(--sidebar-width)); }
+            #sidebar.show { left: 0; }
+            #main-content { margin-left: 0; }
+            .mobile-header { display: flex !important; background: var(--sidebar-bg); color: white; padding: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        }
+
+
+        /* Components */
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .qr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
+        .qr-card-item { background: white; padding: 15px; border-radius: 15px; text-align: center; border: 1px solid #e2e8f0; }
+        .qr-card-item img { width: 140px; height: 140px; margin-bottom: 10px; border-radius: 8px; }
+       
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); display: none; justify-content: center; align-items: center; z-index: 9999; }
+        #reader { width: 100%; max-width: 500px; margin: auto; border-radius: 15px; overflow: hidden; border: 2px solid #ddd; }
+       
+        .badge-hadir { background-color: #10b981; color: white; }
+        .badge-sakit { background-color: #f59e0b; color: white; }
+        .badge-izin { background-color: #3b82f6; color: white; }
+        .badge-alpha { background-color: #ef4444; color: white; }
+        .badge-dl { background-color: #8b5cf6; color: white; }
+    </style>
+</head>
+<body>
+
+
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center"><div class="spinner-border text-danger"></div><p class="mt-3 fw-bold" id="loadingText">Menghubungkan...</p></div>
+</div>
+
+
+<div class="mobile-header d-none justify-content-between align-items-center sticky-top">
+    <span class="fw-bold" id="mobile-school-name">E-ABSENSI</span>
+    <button class="btn btn-sm btn-outline-light" onclick="toggleSidebar()"><i class="fas fa-bars"></i> Menu</button>
+</div>
+
+
+<div id="sidebar">
+    <div class="sidebar-header">
+        <img id="side-logo" src="" style="height: 50px; margin-bottom: 10px; border-radius: 5px;">
+        <h6 class="fw-bold mb-0 text-truncate px-2" id="side-school-name">YAYASAN</h6>
+    </div>
+    <div class="sidebar-menu">
+        <div class="sidebar-item active" id="nav-dashboard" onclick="switchMenu('dashboard')"><i class="fas fa-chart-line"></i> Dashboard</div>
+        <div class="sidebar-item" id="nav-scan" onclick="switchMenu('scan')"><i class="fas fa-qrcode"></i> Scan Absensi</div>
+       
+        <div class="admin-only" style="display:none;">
+            <div class="px-4 py-2 small text-uppercase text-muted fw-bold mt-3" style="font-size: 0.65rem;">Admin Panel</div>
+            <div class="sidebar-item" id="nav-anak-yatim" onclick="switchMenu('anak-yatim')"><i class="fas fa-users"></i> Data Anak Yatim</div>
+            <div class="sidebar-item" id="nav-absen-manual" onclick="switchMenu('absen-manual')"><i class="fas fa-edit"></i> Absen Manual</div>
+            <div class="sidebar-item" id="nav-cetak-qr" onclick="switchMenu('cetak-qr')"><i class="fas fa-address-card"></i> Cetak Kartu QR</div>
+            <div class="sidebar-item" id="nav-rekap" onclick="switchMenu('rekap')"><i class="fas fa-file-signature"></i> Rekap Kehadiran</div>
+            <div class="sidebar-item" id="nav-settings" onclick="switchMenu('settings')"><i class="fas fa-cog"></i> Pengaturan</div>
+        </div>
+
+
+        <div class="mt-5 px-3">
+            <button class="btn btn-sm w-100 fw-bold" id="btnAuth" onclick="toggleAuth()"></button>
+        </div>
+    </div>
+</div>
+
+
+<div id="main-content">
+   
+    <div id="view-dashboard" class="menu-view">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="fw-bold">Dashboard</h3>
+            <span class="badge bg-white text-dark p-2 border" id="display-date"></span>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3"><div class="card p-4 border-start border-danger border-5"><h6>Total Anak Yatim</h6><h2 class="fw-bold" id="statTotal">0</h2></div></div>
+            <div class="col-md-4 mb-3"><div class="card p-4 border-start border-success border-5"><h6>Hadir Hari Ini</h6><h2 class="fw-bold text-success" id="statHadir">0</h2></div></div>
+            <div class="col-md-4 mb-3"><div class="card p-4 border-start border-warning border-5"><h6>Tidak Hadir</h6><h2 class="fw-bold text-warning" id="statBelum">0</h2></div></div>
+        </div>
+        <div class="card p-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-history me-2 text-danger"></i>Aktivitas Terbaru</h5>
+            <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Nomor HP</th><th>Nama</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr></thead><tbody id="tableDashboard"></tbody></table></div>
+        </div>
+    </div>
+
+
+    <div id="view-login" class="menu-view d-none text-center pt-5">
+        <div class="card p-4 mx-auto shadow-lg" style="max-width: 400px;">
+            <h4 class="fw-bold mb-4">Admin Login</h4>
+            <div id="previewBadge" class="alert alert-warning d-none small">Preview: admin / Admin2025!</div>
+            <form onsubmit="handleLogin(event)">
+                <input type="text" id="loginUser" class="form-control mb-3" placeholder="Username" required>
+                <input type="password" id="loginPass" class="form-control mb-4" placeholder="Password" required>
+                <button type="submit" class="btn btn-danger w-100 fw-bold py-2">MASUK</button>
+            </form>
+        </div>
+    </div>
+
+
+    <div id="view-scan" class="menu-view d-none text-center">
+        <div class="card p-4 mx-auto" style="max-width: 600px;">
+            <h3 class="fw-bold mb-4">Scanner QR</h3>
+            <div class="btn-group mb-4 w-100 shadow-sm">
+                <input type="radio" class="btn-check" name="scanType" id="typeMasuk" value="masuk" checked>
+                <label class="btn btn-outline-success py-3 fw-bold" for="typeMasuk">MASUK</label>
+                <input type="radio" class="btn-check" name="scanType" id="typePulang" value="pulang">
+                <label class="btn btn-outline-danger py-3 fw-bold" for="typePulang">PULANG</label>
+            </div>
+            <div id="reader"></div>
+        </div>
+    </div>
+
+
+    <div id="view-anak-yatim" class="menu-view d-none">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3>Data Anak Yatim</h3>
+            <button class="btn btn-danger" onclick="openAnakYatimModal()"><i class="fas fa-plus me-1"></i> Tambah Baru</button>
+        </div>
+        <div class="card p-4"><div class="table-responsive"><table class="table"><thead><tr><th>Nomor HP</th><th>Nama</th><th>Alamat</th><th class="text-end">Aksi</th></tr></thead><tbody id="tableAnakYatim"></tbody></table></div></div>
+    </div>
+
+
+    <div id="view-absen-manual" class="menu-view d-none">
+        <h3 class="fw-bold mb-4">Input Absen Manual</h3>
+        <div class="card p-4 mx-auto" style="max-width: 600px;">
+            <form id="manualAbsenForm" onsubmit="handleManualAbsenSubmit(event)">
+                <div class="mb-3"><label class="form-label fw-bold small">Pilih Anak Yatim</label><select id="manualNomorHp" class="form-select" required></select></div>
+                <div class="mb-3"><label class="form-label fw-bold small">Tanggal</label><input type="date" id="manualTanggal" class="form-control" required></div>
+                <div class="mb-3"><label class="form-label fw-bold small">Status Kehadiran</label>
+                    <select id="manualStatus" class="form-select" onchange="toggleManualCustom()">
+                        <option value="Sakit">Sakit (S)</option>
+                        <option value="Izin">Izin (I)</option>
+                        <option value="Alpha">Alpha (A)</option>
+                        <option value="Dinas Luar">Dinas Luar (DL)</option>
+                        <option value="Custom">Status Kustom</option>
+                    </select>
+                </div>
+                <div class="mb-4 d-none" id="manualCustomContainer"><label class="form-label fw-bold small">Tulis Status</label><input type="text" id="manualCustomStatus" class="form-control"></div>
+                <button type="submit" class="btn btn-danger w-100 fw-bold py-2">SIMPAN ABSENSI</button>
+            </form>
+        </div>
+    </div>
+
+
+    <div id="view-cetak-qr" class="menu-view d-none">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3>Katalog Kartu QR</h3>
+            <button class="btn btn-dark" onclick="printAllQR()"><i class="fas fa-print me-1"></i> Cetak Grid</button>
+        </div>
+        <div class="qr-grid" id="gridQR"></div>
+    </div>
+
+
+    <div id="view-rekap" class="menu-view d-none">
+        <div class="card p-4 mb-4">
+            <div class="row g-3">
+                <div class="col-md-3"><label class="small fw-bold">Tipe</label><select id="rekapType" class="form-select" onchange="toggleRekapFilter()"><option value="harian">Harian</option><option value="bulanan">Bulanan</option></select></div>
+                <div class="col-md-3"><label class="small fw-bold">Filter Data</label><select id="rekapNomorHp" class="form-select"></select></div>
+                <div class="col-md-3" id="monthFilterContainer" style="display:none;"><label class="small fw-bold">Bulan</label><input type="month" id="rekapMonth" class="form-control"></div>
+                <div class="col-md-3 d-flex align-items-end"><button class="btn btn-danger w-100 fw-bold" onclick="renderRekapTable()">CARI</button></div>
+            </div>
+        </div>
+        <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0">Tabel Laporan</h6>
+                <button class="btn btn-sm btn-outline-dark" onclick="printRekap()"><i class="fas fa-print me-1"></i> Preview Laporan</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered text-center align-middle" id="tableToPrint">
+                    <thead class="table-light"><tr><th>Tanggal</th><th>Nomor HP</th><th>Nama</th><th>Masuk</th><th>Pulang</th><th>Status</th></tr></thead>
+                    <tbody id="tableRekap"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="view-settings" class="menu-view d-none">
+        <div class="card p-4">
+            <h4 class="fw-bold mb-4">Profil Yayasan</h4>
+            <form id="settingsForm" onsubmit="handleSettingsSave(event)">
+                <div class="row">
+                    <div class="col-md-6 mb-3"><label class="small fw-bold">Nama Yayasan</label><input type="text" name="nama_yayasan" class="form-control" required></div>
+                    <div class="col-md-6 mb-3"><label class="small fw-bold">Logo (URL)</label><input type="url" name="logo_url" class="form-control" required></div>
+                    <div class="col-md-12 mb-3"><label class="small fw-bold">Alamat Kop</label><textarea name="kop_yayasan" class="form-control" rows="2"></textarea></div>
+                    <div class="col-md-4 mb-3"><label class="small fw-bold">Admin Yayasan</label><input type="text" name="admin" class="form-control" required></div>
+                    <div class="col-md-4 mb-3"><label class="small fw-bold">Nomor HP Admin</label><input type="text" name="nomor_hp_admin" class="form-control" required></div>
+                    <div class="col-md-4 mb-3"><label class="small fw-bold">Tempat/Kota TTD</label><input type="text" name="tempat_ttd" class="form-control" required></div>
+                </div>
+                <button type="submit" class="btn btn-danger px-5 fw-bold">SIMPAN PERUBAHAN</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="anakYatimModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-0 shadow"><form id="anakYatimForm" onsubmit="handleAnakYatimSubmit(event)">
+        <div class="modal-header border-0"><h5>Informasi Anak Yatim</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body p-4">
+            <div class="mb-3"><label class="small fw-bold">Nomor HP</label><input type="number" id="anakYatimNomorHp" class="form-control" required></div>
+            <div class="mb-3"><label class="small fw-bold">Nama Lengkap</label><input type="text" id="anakYatimNama" class="form-control" required></div>
+            <div class="mb-3"><label class="small fw-bold">Alamat</label><input type="text" id="anakYatimAlamat" class="form-control" required></div>
+        </div>
+        <div class="modal-footer border-0"><button type="submit" class="btn btn-danger w-100 fw-bold">SIMPAN DATA</button></div>
+    </form></div></div>
+</div>
+
+
+<footer class="text-center mt-auto py-4 no-print">
+    <small class="text-muted">Generated by <a href="https://lynk.id/edudigital-id" target="_blank" class="text-decoration-none text-secondary">Nanang Sriyadi</a></small>
+</footer>
+
+
+<script>
+    // State Global
+    let appData = { anakYatim: [], absensi: [], settings: {}, today: '' };
+    let currentUser = null;
+    let html5QrcodeScanner = null;
+    const API = "PASTE_URL_EXEC_KAMU_DI_SINI";
+
+
+    // --- INISIALISASI ---
+    window.onload = () => { initApp(); };
+
+
+    function initApp() {
+        // Cek login admin di browser
+        const saved = localStorage.getItem('absen_admin_session');
+        if (saved) currentUser = JSON.parse(saved);
+
+        checkLoginState();
+
+        // Refresh data via fetch
+        refreshData();
+
+        // Mode Simulation / Preview
+        if (typeof google === 'undefined') {
+            const badge = document.getElementById('previewBadge');
+            if (badge) badge.classList.remove('d-none');
+
+            appData.settings = {
+                nama_yayasan: "YAYASAN SIMULASI",
+                logo_url: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Logo_Tut_Wuri_Handayani.png",
+                kop_yayasan: "Jl. Merdeka No.1",
+                admin: "Admin Yayasan",
+                nomor_hp_admin: "08123456789",
+                tempat_ttd: "Jakarta"
+            };
+
+            appData.today = new Date().toISOString().split('T')[0];
+
+            // Branding & dashboard tetap jalan
+            updateBranding();
+            renderDashboard();
+        }
+    }
+
+
+    // --- CORE NAVIGATION ---
+    function switchMenu(menu) {
+        // Sembunyikan semua view
+        const views = document.querySelectorAll('.menu-view');
+        views.forEach(v => v.classList.add('d-none'));
+       
+        // Hilangkan active dari semua menu
+        const items = document.querySelectorAll('.sidebar-item');
+        items.forEach(i => i.classList.remove('active'));
+       
+        // Tampilkan target view
+        const targetView = document.getElementById('view-' + menu);
+        if (targetView) targetView.classList.remove('d-none');
+       
+        // Set menu active
+        const targetNav = document.getElementById('nav-' + menu);
+        if (targetNav) targetNav.classList.add('active');
+       
+        // Tutup sidebar mobile
+        if(window.innerWidth < 992) {
+            const sidebar = document.getElementById('sidebar');
+            if(sidebar) sidebar.classList.remove('show');
+        }
+
+
+        // Trigger fungsi spesifik menu
+        if (menu === 'scan') initScanner(); else stopScanner();
+        if (menu === 'anak-yatim') renderAnakYatim();
+        if (menu === 'cetak-qr') renderQR();
+        if (menu === 'absen-manual') populateManualSelect();
+        if (menu === 'rekap') renderRekapTable();
+        if (menu === 'dashboard') renderDashboard();
+    }
+
+
+    function toggleSidebar() {
+        const side = document.getElementById('sidebar');
+        if(side) side.classList.toggle('show');
+    }
+
+
+    // --- AUTH ---
+    function checkLoginState() {
+        const btn = document.getElementById('btnAuth');
+        const adminSection = document.querySelectorAll('.admin-only');
+        if (currentUser) {
+            adminSection.forEach(el => el.style.display = 'block');
+            if(btn) { btn.innerText = "Logout Admin"; btn.className = "btn btn-sm btn-outline-danger w-100"; }
+        } else {
+            adminSection.forEach(el => el.style.display = 'none');
+            if(btn) { btn.innerText = "Admin Login"; btn.className = "btn btn-sm btn-danger w-100"; }
+        }
+    }
+
+
+    function toggleAuth() {
+        if(currentUser) {
+            localStorage.removeItem('absen_admin_session');
+            currentUser = null; checkLoginState(); switchMenu('dashboard');
+            Swal.fire('Logout Berhasil', '', 'success');
+        } else switchMenu('login');
+    }
+
+
+    function handleLogin(e) {
+        e.preventDefault();
+        fetch(API + "?action=login", {
+            method:"POST",
+            body: JSON.stringify({
+              username: loginUser.value,
+              password: loginPass.value
+            })
+        })
+        .then(res=>res.json())
+        .then(res=>{
+          if(res.success){
+            localStorage.setItem("absen_admin_session", JSON.stringify(res.user));
+            currentUser = res.user;
+            checkLoginState();
+            switchMenu('dashboard');
+            Swal.fire("Login Berhasil","","success");
+          } else {
+            Swal.fire("Gagal",res.message,"error");
+          }
+        });
+    }
+
+
+    function onLoginSuccess(user) { localStorage.setItem('absen_admin_session', JSON.stringify(user)); currentUser = user; checkLoginState(); switchMenu('dashboard'); }
+
+
+    // --- DATA FETCHING ---
+    function startLoading(txt = "Sedang Memproses...") {
+        const ltxt = document.getElementById('loadingText'); if(ltxt) ltxt.innerText = txt;
+        const lovr = document.getElementById('loadingOverlay'); if(lovr) lovr.style.display = 'flex';
+        document.querySelectorAll('button').forEach(b => b.disabled = true);
+    }
+
+
+    function endLoading() {
+        const lovr = document.getElementById('loadingOverlay'); if(lovr) lovr.style.display = 'none';
+        document.querySelectorAll('button').forEach(b => b.disabled = false);
+    }
+
+
+    function refreshData() {
+        startLoading("Sinkronisasi Data...");
+        fetch(API + "?action=getData", {
+            method: "POST"
+        })
+        .then(res => res.json())
+        .then(res => {
+            endLoading();
+            appData = res;
+            updateBranding();
+            renderDashboard();
+            populateFilters();
+        })
+        .catch(err => {
+            endLoading();
+            Swal.fire("Error", "Gagal koneksi server", "error");
+        });
+    }
+
+
+    function updateBranding() {
+        const s = appData.settings;
+        document.querySelectorAll('#side-school-name, #mobile-school-name').forEach(el => el.innerText = s.nama_yayasan || "YAYASAN");
+        const logo = document.getElementById('side-logo'); if(logo) logo.src = s.logo_url;
+        const ddate = document.getElementById('display-date'); if(ddate) ddate.innerText = new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const form = document.getElementById('settingsForm'); if(form) Object.keys(s).forEach(key => { if(form.elements[key]) form.elements[key].value = s[key]; });
+    }
+
+
+    // --- SCANNER ---
+    function initScanner() {
+        const reader = document.getElementById('reader');
+        if(!reader) return;
+
+
+        // Jika scanner sudah aktif, jangan buat ulang
+        if (html5QrcodeScanner) return;
+
+
+        // Menggunakan Html5QrcodeScanner untuk menembus blokir iframe Google
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            {
+                fps: 10,
+                qrbox: { width: 220, height: 220 }, // Ukuran diperkecil agar pas di semua HP
+                rememberLastUsedCamera: true
+            },
+            false // Sembunyikan pesan log berlebih
+        );
+
+
+        html5QrcodeScanner.render(
+            (txt) => {
+                // Ketika QR Code berhasil terbaca
+                stopScanner();
+                processScan(txt);
+            },
+            (err) => {
+                // Abaikan log error pembacaan frame per detik
+            }
+        );
+    }
+
+
+    function stopScanner() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.clear().then(() => {
+                html5QrcodeScanner = null;
+            }).catch(e => console.log(e));
+        }
+    }
+
+
+    // --- MANUAL ---
+    function toggleManualCustom() { const val = document.getElementById('manualStatus').value; document.getElementById('manualCustomContainer').classList.toggle('d-none', val !== 'Custom'); }
+    function populateManualSelect() {
+        let opt = '<option value="">-- Pilih Anak Yatim --</option>';
+        appData.anakYatim.forEach(g => opt += `<option value="${g.nomor_hp}">${g.nama}</option>`);
+        const mnip = document.getElementById('manualNomorHp'); if(mnip) mnip.innerHTML = opt;
+        const mtgl = document.getElementById('manualTanggal'); if(mtgl) mtgl.value = appData.today;
+    }
+    function handleManualAbsenSubmit(e) {
+        e.preventDefault();
+        let status = document.getElementById('manualStatus').value;
+        if (status === 'Custom') {
+            status = document.getElementById('manualCustomStatus').value || 'Custom';
+        }
+
+        const data = {
+            nomorHp: document.getElementById('manualNomorHp').value,
+            tanggal: document.getElementById('manualTanggal').value,
+            status: status
+        };
+
+        startLoading("Menyimpan...");
+
+        fetch(API + "?action=manualAbsen", {
+            method: "POST",
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(res => {
+            endLoading();
+
+            if (res.success) {
+                Swal.fire("Berhasil", res.message, "success");
+                document.getElementById('manualAbsenForm').reset();
+                refreshData();
+            } else {
+                Swal.fire("Gagal", res.message, "error");
+            }
+        })
+        .catch(err => {
+            endLoading();
+            Swal.fire("Error", "Gagal koneksi ke server", "error");
+        });
+    }
+
+
+    // --- ANAK YATIM ---
+    function renderAnakYatim() {
+        let html = '';
+        appData.anakYatim.forEach(g => {
+            html += `<tr><td>${g.nomor_hp}</td><td><span class="fw-bold">${g.nama}</span></td><td>${g.alamat}</td><td class="text-end"><button class="btn btn-sm btn-outline-info me-1" onclick="editAnakYatim('${g.nomor_hp}')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteAnakYatimConfirm('${g.nomor_hp}')"><i class="fas fa-trash"></i></button></td></tr>`;
+        });
+        const tguru = document.getElementById('tableAnakYatim'); if(tguru) tguru.innerHTML = html || '<tr><td colspan="4" class="text-center py-4">Kosong</td></tr>';
+    }
+
+
+    function openAnakYatimModal() { document.getElementById('anakYatimForm').reset(); document.getElementById('anakYatimNomorHp').disabled = false; new bootstrap.Modal(document.getElementById('anakYatimModal')).show(); }
+   
+    function editAnakYatim(nomorHp) { const g = appData.anakYatim.find(x => x.nomor_hp.toString() === nomorHp.toString()); if(g) { document.getElementById('anakYatimNomorHp').value = g.nomor_hp; document.getElementById('anakYatimNomorHp').disabled = true; document.getElementById('anakYatimNama').value = g.nama; document.getElementById('anakYatimAlamat').value = g.alamat; new bootstrap.Modal(document.getElementById('anakYatimModal')).show(); } }
+   
+    function handleAnakYatimSubmit(e) {
+        e.preventDefault();
+        const data = {
+            nomorHp: document.getElementById('anakYatimNomorHp').value,
+            nama: document.getElementById('anakYatimNama').value,
+            alamat: document.getElementById('anakYatimAlamat').value
+        };
+
+        startLoading("Menyimpan...");
+
+        fetch(API + "?action=saveAnak", {
+            method: "POST",
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(res => {
+            endLoading();
+
+            if (res.success) {
+                bootstrap.Modal
+                    .getInstance(document.getElementById('anakYatimModal'))
+                    .hide();
+
+                Swal.fire("Berhasil", "Data anak yatim disimpan", "success");
+                refreshData();
+            } else {
+                Swal.fire("Gagal", res.message || "Gagal menyimpan", "error");
+            }
+        })
+        .catch(err => {
+            endLoading();
+            Swal.fire("Error", "Koneksi ke server gagal", "error");
+        });
+    }
+   
+    function deleteAnakYatimConfirm(nomorHp) {
+        Swal.fire({
+            title: 'Hapus Data?',
+            icon: 'warning',
+            showCancelButton: true
+        }).then(r => {
+            if (r.isConfirmed) {
+                startLoading("Menghapus...");
+
+                fetch(`${API}?action=deleteAnak`, {
+                    method: "POST",
+                    body: JSON.stringify({ nomorHp })
+                })
+                .then(res => res.json())
+                .then(res => {
+                    endLoading();
+
+                    if (res.success) {
+                        Swal.fire("Berhasil", "Data anak yatim dihapus", "success");
+                        refreshData();
+                    } else {
+                        Swal.fire("Gagal", res.message || "Gagal menghapus", "error");
+                    }
+                })
+                .catch(err => {
+                    endLoading();
+                    Swal.fire("Error", "Koneksi ke server gagal", "error");
+                });
+            }
+        });
+    }
+
+
+    // --- REKAP & DASHBOARD ---
+    function renderDashboard() {
+        const total = appData.anakYatim.length;
+        const hadirs = appData.absensi.filter(a => a.tanggal.includes(appData.today));
+        const countHadir = hadirs.filter(a => a.status === 'Hadir').length;
+        const stotal = document.getElementById('statTotal'); if(stotal) stotal.innerText = total;
+        const shadir = document.getElementById('statHadir'); if(shadir) shadir.innerText = countHadir;
+        const sbelum = document.getElementById('statBelum'); if(sbelum) sbelum.innerText = Math.max(0, total - countHadir);
+        let html = '';
+        hadirs.slice(-8).reverse().forEach(a => {
+            html += `<tr><td>${a.nomor_hp}</td><td class="fw-bold">${a.nama}</td><td>${a.waktu_masuk}</td><td>${a.waktu_pulang}</td><td>${getStatusBadge(a.status)}</td></tr>`;
+        });
+        const tdash = document.getElementById('tableDashboard'); if(tdash) tdash.innerHTML = html || '<tr><td colspan="5" class="text-center py-4 text-muted">Belum ada aktivitas hari ini</td></tr>';
+    }
+
+
+    function getStatusBadge(st) {
+        let cls = 'badge-hadir'; if(st === 'Sakit') cls = 'badge-sakit'; else if(st === 'Izin') cls = 'badge-izin'; else if(st === 'Alpha') cls = 'badge-alpha'; else if(st === 'Dinas Luar') cls = 'badge-dl';
+        return `<span class="badge ${cls}">${st}</span>`;
+    }
+
+
+    function toggleRekapFilter() { const mcont = document.getElementById('monthFilterContainer'); if(mcont) mcont.style.display = document.getElementById('rekapType').value === 'bulanan' ? 'block' : 'none'; }
+   
+    function populateFilters() {
+        let opt = '<option value="">-- Semua Data --</option>';
+        appData.anakYatim.forEach(g => opt += `<option value="${g.nomor_hp}">${g.nama}</option>`);
+        const rguru = document.getElementById('rekapNomorHp'); if(rguru) rguru.innerHTML = opt;
+    }
+   
+    function renderRekapTable() {
+        const type = document.getElementById('rekapType').value, nomorHp = document.getElementById('rekapNomorHp').value, month = document.getElementById('rekapMonth').value;
+        let filtered = appData.absensi;
+        if(nomorHp) filtered = filtered.filter(a => a.nomor_hp.toString() === nomorHp.toString());
+        if(type === 'bulanan' && month) filtered = filtered.filter(a => a.tanggal.startsWith(month)); else if(type === 'harian') filtered = filtered.filter(a => a.tanggal.includes(appData.today));
+        let html = '';
+        filtered.forEach(a => { html += `<tr><td>${a.tanggal}</td><td>${a.nomor_hp}</td><td class="text-start">${a.nama}</td><td>${a.waktu_masuk}</td><td>${a.waktu_pulang}</td><td>${a.status}</td></tr>`; });
+        const trekap = document.getElementById('tableRekap'); if(trekap) trekap.innerHTML = html || '<tr><td colspan="6" class="py-4">Tidak ada data ditemukan</td></tr>';
+    }
+
+
+    // --- PRINTING ---
+    function renderQR() {
+        let html = '';
+        appData.anakYatim.forEach(g => {
+            const url = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${g.nomor_hp}`;
+            html += `<div class="qr-card-item"><img src="${url}"><div class="fw-bold small mb-1">${g.nama}</div><div class="small text-muted">Nomor HP: ${g.nomor_hp}</div></div>`;
+        });
+        const grid = document.getElementById('gridQR'); if(grid) grid.innerHTML = html || '<p class="text-center py-5">Belum ada data</p>';
+    }
+
+
+    function printAllQR() {
+        const s = appData.settings;
+        let content = `<html><head><title>Kartu Absen</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>body{padding:20px;text-align:center;}.card-print{width:220px;border:1px solid #000;padding:15px;display:inline-block;margin:8px;border-radius:10px;}.sch{font-size:0.7rem;font-weight:bold;margin-bottom:5px; border-bottom:1px solid #eee; padding-bottom:5px;}</style></head><body><h3>${s.nama_yayasan}</h3><hr>`;
+        appData.anakYatim.forEach(g => { const qr = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${g.nomor_hp}`; content += `<div class="card-print"><div class="sch">${s.nama_yayasan}</div><img src="${qr}"><br><b>${g.nama}</b><br><small>${g.alamat}</small></div>`; });
+        content += `</body></html>`;
+        const win = window.open('', '_blank'); win.document.write(content); win.document.close(); setTimeout(() => win.print(), 700);
+    }
+
+
+    function printRekap() {
+        const s = appData.settings, tableHtml = document.getElementById('tableToPrint').outerHTML;
+        let content = `<html><head><title>Laporan Kehadiran</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><style>body{padding:50px;}.kop{text-align:center;border-bottom:4px double #000;padding-bottom:10px;margin-bottom:25px;display:flex;align-items:center;justify-content:center;}.kop-logo{height:80px;margin-right:20px;}.kop-text{flex:1;text-align:center;}.kop h2{margin:0;text-transform:uppercase;font-weight:bold;}.ttd{float:right;text-align:center;width:300px;margin-top:50px;}@media print{.no-print{display:none;}}</style></head><body><div class="kop"><img src="${s.logo_url}" class="kop-logo"><div class="kop-text"><h2>${s.nama_yayasan}</h2><p class="mb-0">${s.kop_yayasan}</p></div></div><h4 class="text-center fw-bold mb-4">LAPORAN REKAP KEHADIRAN ANAK YATIM</h4>${tableHtml}<div class="ttd"><p>${s.tempat_ttd}, ${new Date().toLocaleDateString('id-ID', {day:'numeric', month:'long', year:'numeric'})}</p><p>Admin,</p><div style="height: 80px;"></div><b><u>${s.admin}</u></b><br>Nomor HP. ${s.nomor_hp_admin}</div></body></html>`;
+        const win = window.open('', '_blank'); win.document.write(content); win.document.close(); setTimeout(() => win.print(), 700);
+    }
+
+
+    function handleSettingsSave(e) {
+        e.preventDefault(); 
+        const data = Object.fromEntries(new FormData(e.target).entries());
+
+        startLoading("Menyimpan...");
+
+        fetch(API + "?action=updateSettings", {
+            method: "POST",
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(res => {
+            endLoading();
+
+            if (res.success) {
+                Swal.fire("Berhasil", "Profil yayasan diperbarui", "success");
+                refreshData();
+            } else {
+                Swal.fire("Gagal", res.message || "Gagal menyimpan", "error");
+            }
+        })
+        .catch(err => {
+            endLoading();
+            Swal.fire("Error", "Koneksi ke server gagal", "error");
+        });
+    }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
