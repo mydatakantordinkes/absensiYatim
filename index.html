@@ -420,7 +420,7 @@
 
 
     // --- SCANNER ---
-    function initScanner() {
+    function initScanner(tipe) { // tipe = 'masuk' atau 'pulang'
         const reader = document.getElementById('reader');
         if(!reader) return;
 
@@ -456,9 +456,29 @@
 
     function stopScanner() {
         if (html5QrcodeScanner) {
-            html5QrcodeScanner.clear().then(() => {
+            html5QrcodeScanner.clear().catch(err => console.log("Error stop scanner:", err));
                 html5QrcodeScanner = null;
-            }).catch(e => console.log(e));
+        }
+    }
+
+    async function submitAbsen(nomorHp, tipe) {
+        startLoading("Memproses absen...");
+
+        try {
+            const params = new URLSearchParams({ nomorHp, tipe });
+            const response = await fetch(`${GAS_WEBAPP_URL}?${params.toString()}`);
+            const res = await response.json();
+
+            endLoading();
+            if (res.success) {
+                Swal.fire('Berhasil', res.message, 'success');
+                refreshData();
+            } else {
+                Swal.fire('Gagal', res.message, 'error');
+            }
+        } catch (err) {
+            endLoading();
+            Swal.fire('Error', err.message, 'error');
         }
     }
 
