@@ -46,8 +46,7 @@ function doPost(e) {
 function output(obj){
   return ContentService
     .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*");
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /***********************
@@ -150,8 +149,18 @@ function processAbsen(nomorHp, tipe){
   const anakSheet = ss.getSheetByName('Anak Yatim');
   const absenSheet = ss.getSheetByName('Absensi');
 
-  const today = Utilities.formatDate(new Date(),"GMT+7","yyyy-MM-dd");
-  const now = Utilities.formatDate(new Date(),"GMT+7","HH:mm:ss");
+  const nowDate = new Date();
+
+  const today = Utilities.formatDate(
+    nowDate,
+    "Asia/Jakarta",
+    "yyyy-MM-dd"
+  );
+  const now = Utilities.formatDate(
+    nowDate,
+    "Asia/Jakarta",
+    "yyyy-MM-dd HH:mm:ss"
+  );
 
   const anak = anakSheet.getDataRange().getValues()
     .find(r=>r[0]==nomorHp);
@@ -170,7 +179,7 @@ function processAbsen(nomorHp, tipe){
     if(existing)
       return {success:false,message:'Sudah absen masuk hari ini!'};
 
-    absenSheet.appendRow([today,nomorHp,anak[1],now,'-','Hadir']);
+    absenSheet.appendRow([now,nomorHp,anak[1],now,'-','Hadir']);
     return {success:true,message:`Berhasil Masuk: ${anak[1]}`};
   }
 
@@ -189,3 +198,54 @@ function processAbsen(nomorHp, tipe){
 
   return {success:false};
 }
+
+/***********************
+ * ABSENSI MANUAL
+ ***********************/
+
+ function saveManualAbsen(data){
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const absenSheet = ss.getSheetByName('Absensi');
+  const anakSheet = ss.getSheetByName('Anak Yatim');
+
+  const nowDate = new Date();
+
+  const now = Utilities.formatDate(
+    nowDate,
+    "Asia/Jakarta",
+    "yyyy-MM-dd HH:mm:ss"
+  );
+
+  const nomorHp = data.nomorHp;
+  const tanggalInput = data.tanggal;
+  const status = data.status || "Hadir";
+
+  if (!nomorHp || !tanggalInput) {
+    return { success:false, message:"Data tidak lengkap" };
+  }
+
+  const anak = anakSheet.getDataRange().getValues()
+    .find(r => r[0] == nomorHp);
+
+  if (!anak) {
+    return { success:false, message:"Nomor HP tidak terdaftar" };
+  }
+
+  const tanggal = new Date(tanggalInput + "T00:00:00");
+
+  absenSheet.appendRow([
+    tanggal,
+    nomorHp,
+    anak[1],
+    now,
+    "-",
+    status
+  ]);
+
+  return {
+    success:true,
+    message:"Absen manual berhasil disimpan"
+  };
+}
+
