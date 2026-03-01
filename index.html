@@ -486,6 +486,7 @@
     async function submitAbsen(nomorHp, tipe) {
         const response = await fetch(API + "?action=absen", {
             method: "POST",
+            mode: "cors",
             headers: {
                 "Content-Type": "application/json"
             },
@@ -494,6 +495,10 @@
               tipe: tipe
             })
         });
+
+        if (!response.ok) {
+            throw new Error("HTTP error " + response.status);
+        }
 
         return await response.json();
     }
