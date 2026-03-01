@@ -312,20 +312,11 @@
 
         // Trigger fungsi spesifik menu
         if (menu === 'scan') initScanner(); else stopScanner();
-        if (menu === 'anak-yatim') {
-            await refreshData();
-            renderAnakYatim();
-        }
+        if (menu === 'anak-yatim') await refreshData(); renderAnakYatim();
         if (menu === 'cetak-qr') renderQR();
         if (menu === 'absen-manual') populateManualSelect();
-        if (menu === 'rekap') {
-            await refreshData();
-            renderRekapTable();
-        }
-        if (menu === 'dashboard') {
-            await refreshData();
-            renderDashboard();
-        }
+        if (menu === 'rekap') await refreshData(); renderRekapTable();
+        if (menu === 'dashboard') await refreshData(); renderDashboard();
     }
 
 
