@@ -445,7 +445,7 @@
             (txt) => {
                 // Ketika QR Code berhasil terbaca
                 stopScanner();
-                processScan(txt);
+                processAbsen(txt);
             },
             (err) => {
                 // Abaikan log error pembacaan frame per detik
