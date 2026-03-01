@@ -1,0 +1,191 @@
+/*************************************************
+ * E-ABSENSI ANAK YATIM
+ * BACKEND API VERSION (Untuk GitHub Frontend)
+ *************************************************/
+
+function doPost(e) {
+  try {
+
+    const action = e.parameter.action;
+    const data = e.postData && e.postData.contents
+      ? JSON.parse(e.postData.contents)
+      : {};
+
+    switch (action) {
+
+      case "login":
+        return output(loginUser(data));
+
+      case "getData":
+        return output(getAppData());
+
+      case "saveAnak":
+        return output(saveAnakYatim(data));
+
+      case "deleteAnak":
+        return output(deleteAnakYatim(data.nomorHp));
+
+      case "absen":
+        return output(processAbsen(data.nomorHp, data.tipe));
+
+      case "manualAbsen":
+        return output(saveManualAbsen(data));
+
+      case "updateSettings":
+        return output(updateSettings(data));
+
+      default:
+        return output({ success:false, message:"Invalid action" });
+    }
+
+  } catch (err) {
+    return output({ success:false, message: err.toString() });
+  }
+}
+
+function output(obj){
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader("Access-Control-Allow-Origin", "*");
+}
+
+/***********************
+ * DATA GLOBAL
+ ***********************/
+
+function getAppData() {
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  const settingsSheet = ss.getSheetByName('Settings');
+  const settings = {};
+  settingsSheet.getDataRange().getValues().slice(1)
+    .forEach(r => settings[r[0]] = r[1]);
+
+  return {
+    settings: settings,
+    anakYatim: clean(ss.getSheetByName('Anak Yatim').getDataRange().getValues()),
+    absensi: clean(ss.getSheetByName('Absensi').getDataRange().getValues()),
+    today: Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd")
+  };
+}
+
+function clean(values){
+  if(values.length <= 1) return [];
+  const headers = values[0];
+  return values.slice(1).map(row=>{
+    let obj={};
+    headers.forEach((h,i)=>{
+      let val=row[i];
+      if(val instanceof Date){
+        val=Utilities.formatDate(val,"GMT+7","yyyy-MM-dd HH:mm:ss");
+      }
+      obj[h.toLowerCase().replace(/\s/g,'_')] = val || "";
+    });
+    return obj;
+  });
+}
+
+/***********************
+ * LOGIN
+ ***********************/
+function loginUser(formData) {
+
+  const config = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName('Config')
+    .getDataRange().getValues();
+
+  const user = config.find(r=>r[0]=='admin_user')[1];
+  const pass = config.find(r=>r[0]=='admin_pass')[1];
+
+  if(formData.username===user && formData.password===pass){
+    return { success:true, user:{username:user, role:'Admin'} };
+  }
+
+  return { success:false, message:'Username atau Password salah!' };
+}
+
+/***********************
+ * CRUD ANAK YATIM
+ ***********************/
+function saveAnakYatim(data){
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName('Anak Yatim');
+
+  sheet.appendRow([
+    data.nomorHp,
+    data.nama,
+    data.alamat,
+    new Date()
+  ]);
+
+  return { success:true };
+}
+
+function deleteAnakYatim(nomorHp){
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName('Anak Yatim');
+
+  const rows = sheet.getDataRange().getValues();
+
+  for(let i=1;i<rows.length;i++){
+    if(rows[i][0]==nomorHp){
+      sheet.deleteRow(i+1);
+      return { success:true };
+    }
+  }
+
+  return { success:false };
+}
+
+/***********************
+ * ABSENSI (ANTI DOUBLE SCAN)
+ ***********************/
+function processAbsen(nomorHp, tipe){
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const anakSheet = ss.getSheetByName('Anak Yatim');
+  const absenSheet = ss.getSheetByName('Absensi');
+
+  const today = Utilities.formatDate(new Date(),"GMT+7","yyyy-MM-dd");
+  const now = Utilities.formatDate(new Date(),"GMT+7","HH:mm:ss");
+
+  const anak = anakSheet.getDataRange().getValues()
+    .find(r=>r[0]==nomorHp);
+
+  if(!anak)
+    return {success:false,message:'Nomor HP tidak terdaftar!'};
+
+  const data = absenSheet.getDataRange().getValues();
+
+  const existing = data.find(r =>
+    Utilities.formatDate(new Date(r[0]),"GMT+7","yyyy-MM-dd")==today
+    && r[1]==nomorHp
+  );
+
+  if(tipe=='masuk'){
+    if(existing)
+      return {success:false,message:'Sudah absen masuk hari ini!'};
+
+    absenSheet.appendRow([today,nomorHp,anak[1],now,'-','Hadir']);
+    return {success:true,message:`Berhasil Masuk: ${anak[1]}`};
+  }
+
+  if(tipe=='pulang'){
+    if(!existing)
+      return {success:false,message:'Belum absen masuk!'};
+
+    const rowIndex = data.indexOf(existing)+1;
+
+    if(existing[4] !== '-')
+      return {success:false,message:'Sudah absen pulang!'};
+
+    absenSheet.getRange(rowIndex,5).setValue(now);
+    return {success:true,message:`Berhasil Pulang: ${anak[1]}`};
+  }
+
+  return {success:false};
+}
